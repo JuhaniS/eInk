@@ -1,0 +1,20 @@
+config.yaml
+credentials.json
+
+# Cache – keep directory, ignore contents
+cache/*
+!cache/.gitkeep
+
+# Output – keep directory, ignore contents
+output/*
+!output/.gitkeep
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+venv/
+.venv/
+
+# macOS
+.DS_Store

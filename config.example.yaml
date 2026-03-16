@@ -1,0 +1,49 @@
+# Sijainti säätä varten
+location:
+  latitude: 60.1699
+  longitude: 24.9384
+  name: "Helsinki"
+
+# Caruna / pycaruna
+caruna:
+  username: "sahkopostisoite@example.com"
+  password: "salasana"
+  # Token tallennetaan automaattisesti cache/caruna_token.json
+
+# Kalenterit – iCal-linkit
+# Google Calendar: Kalenterin asetukset → "Yksityinen osoite iCal-muodossa"
+# Älä jaa config.yaml:ia – URL sisältää salaisen tokenin!
+calendars:
+  - name: "Oma"
+    ical_url: "https://calendar.google.com/calendar/ical/SINUN_KALENTERI_ID/private-TOKEN/basic.ics"
+  # - name: "Perhe"
+  #   ical_url: "https://calendar.google.com/calendar/ical/PERHEEN_ID/private-TOKEN/basic.ics"
+
+# Jätteenkeräysaikataulu
+# Syötä omat tyhjennyspäiväsi – katso aikataulu taloyhtiöltäsi tai HSY:ltä
+# next_date = seuraava tiedossa oleva keräyspäivä (ankkuripiste toistuvuudelle)
+# interval_weeks = kuinka monen viikon välein (1 = joka viikko, 2 = joka toinen viikko)
+waste:
+  collections:
+    - type: "Sekajäte"
+      interval_weeks: 2
+      next_date: "2026-03-20"   # Vaihda omasi
+    - type: "Biojäte"
+      interval_weeks: 1
+      next_date: "2026-03-20"
+    - type: "Paperi"
+      interval_weeks: 4
+      next_date: "2026-03-27"
+    - type: "Kartonki"
+      interval_weeks: 4
+      next_date: "2026-03-27"
+
+# Näytön asetukset
+display:
+  width: 800
+  height: 480
+  rotation: 0   # 0 tai 180
+
+# Cache
+cache:
+  ttl_minutes: 55  # Hieman alle tunnin, jotta cron ehtii päivittää

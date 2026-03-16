@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3 -m venv venv)",
+      "Bash(venv/bin/pip install:*)",
+      "Bash(venv/bin/python main.py --only weather)",
+      "Bash(venv/bin/python -:*)",
+      "Bash(venv/bin/python main.py --only waste)",
+      "Bash(venv/bin/python -c \"import pycaruna; print\\(dir\\(pycaruna\\)\\)\")",
+      "Bash(venv/bin/python -c \"from pycaruna import CarunaPlus, Authenticator, TimeSpan; help\\(Authenticator.__init__\\)\")",
+      "Bash(venv/bin/python -c \"from pycaruna import CarunaPlus, Authenticator, TimeSpan; help\\(CarunaPlus\\)\")",
+      "Bash(venv/bin/python -c \"from pycaruna import Authenticator; help\\(Authenticator.login\\)\")",
+      "Bash(venv/bin/python -c \":*)",
+      "Bash(venv/bin/python -c \"from pycaruna import TimeSpan; print\\(list\\(TimeSpan\\)\\)\")"
+    ]
+  }
+}
