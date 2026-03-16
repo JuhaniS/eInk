@@ -19,9 +19,9 @@ from pathlib import Path
 
 import requests
 
-CACHE_FILE   = Path("cache/hsl.json")
-CACHE_TTL_S  = 180   # 3 minutes – real-time data
-API_URL      = "https://api.digitransit.fi/routing/v2/hsl/gtfs/v1"
+CACHE_FILE      = Path("cache/hsl.json")
+DEFAULT_TTL_MIN = 10   # default: refresh every 10 minutes
+API_URL         = "https://api.digitransit.fi/routing/v2/hsl/gtfs/v1"
 
 QUERY = """
 query NextTrips($fromLat: CoordinateValue!, $fromLon: CoordinateValue!, $toLat: CoordinateValue!, $toLon: CoordinateValue!, $when: OffsetDateTime!, $n: Int!) {
@@ -67,11 +67,11 @@ class DataFetchError(Exception):
     pass
 
 
-def _cache_is_fresh() -> bool:
+def _cache_is_fresh(ttl_minutes: int) -> bool:
     if not CACHE_FILE.exists():
         return False
     age = datetime.now().timestamp() - CACHE_FILE.stat().st_mtime
-    return age < CACHE_TTL_S
+    return age < ttl_minutes * 60
 
 
 def _load_cache() -> dict | None:
@@ -86,31 +86,59 @@ def _save_cache(data: dict):
     CACHE_FILE.write_text(json.dumps(data, ensure_ascii=False, indent=2))
 
 
-def _mode_fi(mode: str) -> str:
-    return {"BUS": "Bus", "TRAM": "Ratikka", "RAIL": "Juna",
-            "SUBWAY": "Metro", "FERRY": "Lautta", "WALK": ""}.get(mode, mode)
+def _within_active_hours(active_hours: list) -> bool:
+    """Returns True if current hour is within the active window [start, end]."""
+    if not active_hours or len(active_hours) < 2:
+        return True
+    hour = datetime.now().hour
+    return active_hours[0] <= hour <= active_hours[1]
 
 
 def fetch(config: dict, use_cache: bool = True) -> dict:
-    if use_cache and _cache_is_fresh():
+    cache_cfg   = config.get("cache", {})
+    ttl         = cache_cfg.get("hsl_ttl_minutes", DEFAULT_TTL_MIN)
+    active_hours = cache_cfg.get("hsl_active_hours", [])
+
+    if use_cache and _cache_is_fresh(ttl):
         return _load_cache()
+
+    # Outside active hours: return stale cache if available, otherwise empty result
+    if not _within_active_hours(active_hours):
+        cached = _load_cache()
+        if cached:
+            cached["_stale"] = True
+            return cached
+        to_name = config.get("hsl", {}).get("to_name", "")
+        return {"connections": [], "to_name": to_name, "fetched_at": datetime.now().isoformat(timespec="seconds")}
 
     hsl_cfg = config.get("hsl", {})
     api_key  = hsl_cfg.get("api_key", "")
-    to_name  = hsl_cfg.get("to_name", "Pasila")
-    to_lat   = float(hsl_cfg.get("to_lat", 60.1985))
-    to_lon   = float(hsl_cfg.get("to_lon", 24.9323))
+    to_name  = hsl_cfg.get("to_name", "")
+    to_lat   = hsl_cfg.get("to_lat")
+    to_lon   = hsl_cfg.get("to_lon")
     n        = int(hsl_cfg.get("num_results", 3))
 
     if not api_key:
         raise DataFetchError(
-            "HSL API key is missing. Register at "
+            "HSL API key missing. Register at "
             "https://portal-api.digitransit.fi/ and add hsl.api_key to config."
+        )
+    if to_lat is None or to_lon is None:
+        raise DataFetchError(
+            "hsl.to_lat and hsl.to_lon are required in config.yaml"
         )
 
     loc = config.get("location", {})
-    from_lat = float(loc.get("latitude",  60.1856))
-    from_lon = float(loc.get("longitude", 24.6140))
+    from_lat = loc.get("latitude")
+    from_lon = loc.get("longitude")
+    if from_lat is None or from_lon is None:
+        raise DataFetchError(
+            "location.latitude and location.longitude are required in config.yaml"
+        )
+    from_lat = float(from_lat)
+    from_lon = float(from_lon)
+    to_lat   = float(to_lat)
+    to_lon   = float(to_lon)
 
     now_iso = datetime.now().astimezone().isoformat(timespec="seconds")
 

@@ -1,49 +1,89 @@
-# Sijainti säätä varten
+# ─────────────────────────────────────────────────────────────────────────────
+# E-ink Dashboard – config.example.yaml
+#
+# Copy this file to config.yaml and fill in your own values.
+# config.yaml is gitignored – never commit it (contains credentials).
+# ─────────────────────────────────────────────────────────────────────────────
+
+# REQUIRED: Your home location (used for weather and HSL routing)
 location:
-  latitude: 60.1699
-  longitude: 24.9384
-  name: "Helsinki"
+  latitude: 60.1699     # decimal degrees, e.g. 60.1699
+  longitude: 24.9384    # decimal degrees, e.g. 24.9384
+  name: "Helsinki"      # display name (not currently shown, but useful for reference)
 
-# Caruna / pycaruna
+# ── Weather ───────────────────────────────────────────────────────────────────
+# Uses Open-Meteo (https://open-meteo.com) – no API key required.
+# location.latitude / location.longitude above are used automatically.
+
+# ── Electricity (optional) ───────────────────────────────────────────────────
+# Caruna customers only. Uses pycaruna to fetch yesterday's consumption.
+# Leave this section out entirely to disable the electricity panel.
 caruna:
-  username: "sahkopostisoite@example.com"
-  password: "salasana"
-  # Token tallennetaan automaattisesti cache/caruna_token.json
+  username: "your@email.com"
+  password: "your-password"
 
-# Kalenterit – iCal-linkit
-# Google Calendar: Kalenterin asetukset → "Yksityinen osoite iCal-muodossa"
-# Älä jaa config.yaml:ia – URL sisältää salaisen tokenin!
+# ── Calendars (optional) ─────────────────────────────────────────────────────
+# iCal links – no OAuth needed.
+# Google Calendar: Settings → (your calendar) → "Secret address in iCal format"
+# Do not share config.yaml – the URL contains a secret token!
 calendars:
-  - name: "Oma"
-    ical_url: "https://calendar.google.com/calendar/ical/SINUN_KALENTERI_ID/private-TOKEN/basic.ics"
-  # - name: "Perhe"
-  #   ical_url: "https://calendar.google.com/calendar/ical/PERHEEN_ID/private-TOKEN/basic.ics"
+  - name: "Personal"
+    ical_url: "https://calendar.google.com/calendar/ical/YOUR_CALENDAR_ID/private-TOKEN/basic.ics"
+  # - name: "Family"
+  #   ical_url: "https://calendar.google.com/calendar/ical/FAMILY_ID/private-TOKEN/basic.ics"
 
-# Jätteenkeräysaikataulu
-# Syötä omat tyhjennyspäiväsi – katso aikataulu taloyhtiöltäsi tai HSY:ltä
-# next_date = seuraava tiedossa oleva keräyspäivä (ankkuripiste toistuvuudelle)
-# interval_weeks = kuinka monen viikon välein (1 = joka viikko, 2 = joka toinen viikko)
+# ── Waste collection schedule (optional) ─────────────────────────────────────
+# Manual schedule – check your building's or municipality's collection calendar.
+# next_date: the next known collection date (used as anchor for recurrence)
+# interval_weeks: how often (1 = weekly, 2 = every two weeks, etc.)
 waste:
   collections:
-    - type: "Sekajäte"
+    - type: "Residual waste"
       interval_weeks: 2
-      next_date: "2026-03-20"   # Vaihda omasi
-    - type: "Biojäte"
+      next_date: "2026-04-01"   # replace with your next collection date
+    - type: "Bio waste"
       interval_weeks: 1
-      next_date: "2026-03-20"
-    - type: "Paperi"
+      next_date: "2026-04-01"
+    - type: "Paper"
       interval_weeks: 4
-      next_date: "2026-03-27"
-    - type: "Kartonki"
-      interval_weeks: 4
-      next_date: "2026-03-27"
+      next_date: "2026-04-01"
+    # - type: "Cardboard"
+    #   interval_weeks: 4
+    #   next_date: "2026-04-01"
 
-# Näytön asetukset
+# ── Daycare / eVaka (optional) ────────────────────────────────────────────────
+# Espoo eVaka service. Leave out to disable the daycare panel.
+# Other municipalities may use different eVaka URLs – set base_url accordingly.
+evaka:
+  username: "your@email.com"
+  password: "your-password"
+  base_url: "https://espoonvarhaiskasvatus.fi"  # change for your municipality
+
+# ── HSL transit (optional) ───────────────────────────────────────────────────
+# Shows next departures from your home location to a destination.
+# Requires a free API key from https://portal-api.digitransit.fi/
+# location.latitude / location.longitude above are used as the origin.
+hsl:
+  api_key: "your-digitransit-api-key"
+  to_name: "Destination"   # display name for the destination
+  to_lat: 60.1985           # destination latitude
+  to_lon: 24.9323           # destination longitude
+  num_results: 5            # how many connections to fetch
+  min_walk_bus: 3           # minimum minutes to walk to a bus/tram stop
+  min_walk_rail: 15         # minimum minutes to walk to a train/metro station
+
+# ── Display ───────────────────────────────────────────────────────────────────
 display:
   width: 800
   height: 480
-  rotation: 0   # 0 tai 180
+  rotation: 0    # 0 or 180
 
-# Cache
+# ── Cache TTLs ────────────────────────────────────────────────────────────────
+# main.py is run by cron every 10 minutes.
+# Each module refreshes only when its TTL has expired.
 cache:
-  ttl_minutes: 55  # Hieman alle tunnin, jotta cron ehtii päivittää
+  ttl_minutes: 55               # weather, calendar (just under 1 hour)
+  hsl_ttl_minutes: 10           # transit: refresh every cron run
+  hsl_active_hours: [6, 22]     # HSL API only called between these hours
+  evaka_ttl_minutes: 1440       # daycare: once per day
+  electricity_ttl_minutes: 720  # electricity: twice per day

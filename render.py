@@ -7,19 +7,40 @@ from PIL import Image, ImageDraw, ImageFont
 
 # ── Font paths ──────────────────────────────────────────────────────────────
 
-def _load_font(size: int, bold: bool = False) -> ImageFont.FreeTypeFont:
-    if platform.system() == "Darwin":
-        path = "/System/Library/Fonts/Helvetica.ttc"
-        index = 1 if bold else 0
-    else:
-        base = "/usr/share/fonts/truetype/dejavu/"
-        path = base + ("DejaVuSans-Bold.ttf" if bold else "DejaVuSans.ttf")
-        index = 0
+# Place Inter font files in fonts/ directory for the best look:
+#   fonts/Inter-Regular.ttf  and  fonts/Inter-Bold.ttf
+# Download from: https://github.com/rsms/inter/releases
+_FONTS_DIR = Path(__file__).parent / "fonts"
 
-    try:
-        return ImageFont.truetype(path, size, index=index)
-    except (OSError, IOError):
-        return ImageFont.load_default()
+def _load_font(size: int, bold: bool = False) -> ImageFont.FreeTypeFont:
+    candidates: list[tuple[str, int]] = []
+
+    # 1. Bundled Inter (works on both macOS and Raspberry Pi)
+    inter = _FONTS_DIR / ("Inter-Bold.ttf" if bold else "Inter-Regular.ttf")
+    if inter.exists():
+        candidates.append((str(inter), 0))
+
+    # 2. Platform system fonts
+    if platform.system() == "Darwin":
+        candidates += [
+            ("/System/Library/Fonts/Supplemental/Futura.ttc", 4 if bold else 0),
+            ("/Library/Fonts/Futura.ttc",                      4 if bold else 0),
+            ("/System/Library/Fonts/Helvetica.ttc",            1 if bold else 0),
+        ]
+    else:
+        base = "/usr/share/fonts/truetype/"
+        candidates += [
+            (base + "inter/Inter-Bold.ttf"   if bold else base + "inter/Inter-Regular.ttf", 0),
+            (base + "dejavu/DejaVuSans-Bold.ttf" if bold else base + "dejavu/DejaVuSans.ttf", 0),
+        ]
+
+    for path, index in candidates:
+        try:
+            return ImageFont.truetype(path, size, index=index)
+        except (OSError, IOError):
+            continue
+
+    return ImageFont.load_default()
 
 
 # ── Constants ──────────────────────────────────────────────────────────────
@@ -250,10 +271,10 @@ def _draw_calendar(draw: ImageDraw.Draw, data: dict | None, x: int, y: int, w: i
 
     events = data.get("events", [])
     if not events:
-        _text(draw, (x + PAD, title_y + 30), "Ei tulevia tapahtumia", FONT_SMALL, fill=GRAY)
+        _text(draw, (x + PAD, title_y + 38), "Ei tulevia tapahtumia", FONT_SMALL, fill=GRAY)
         return
 
-    event_y = title_y + 30
+    event_y = title_y + 38
     row_h1  = 20   # title row height
     row_h2  = 17   # date/time row height
     row_gap = 7
@@ -262,7 +283,7 @@ def _draw_calendar(draw: ImageDraw.Draw, data: dict | None, x: int, y: int, w: i
     visible = []
     tmp_y = event_y
     for ev in events:
-        if tmp_y + block_h > y + h - 4:
+        if tmp_y + block_h > y + h - 10:
             break
         visible.append(ev)
         tmp_y += block_h
@@ -284,27 +305,24 @@ def _draw_calendar(draw: ImageDraw.Draw, data: dict | None, x: int, y: int, w: i
         _text(draw, (x + PAD, event_y + row_h1), dt_str, FONT_TINY, fill=GRAY)
 
         event_y += block_h
-        if i < len(visible) - 1:
-            _divider(draw, x + PAD, event_y - row_gap // 2, x + w - PAD)
 
 
 def _draw_hsl(draw: ImageDraw.Draw, data: dict | None, x: int, y: int, w: int, h: int):
-    hsl_cfg_name = data.get("to_name", "Pasila") if data else "Pasila"
     title_y = y + PAD
     _text(draw, (x + PAD, title_y), "HSL", FONT_LARGE)
     if data and data.get("_stale"):
         _stale_mark(draw, x + PAD + 200, title_y)
 
     if not data:
-        _text(draw, (x + PAD, title_y + 30), "Ei saatavilla", FONT_SMALL, fill=GRAY)
+        _text(draw, (x + PAD, title_y + 38), "Ei saatavilla", FONT_SMALL, fill=GRAY)
         return
 
     connections = data.get("connections", [])
     if not connections:
-        _text(draw, (x + PAD, title_y + 30), "Ei yhteyksiä", FONT_SMALL, fill=GRAY)
+        _text(draw, (x + PAD, title_y + 38), "Ei yhteyksiä", FONT_SMALL, fill=GRAY)
         return
 
-    row_y   = title_y + 30
+    row_y   = title_y + 38
     row_h1  = 22   # top row height (time + minutes)
     row_h2  = 18   # bottom row height (walk + lines + stop)
     row_gap = 8    # gap to next connection
@@ -313,7 +331,7 @@ def _draw_hsl(draw: ImageDraw.Draw, data: dict | None, x: int, y: int, w: int, h
     visible = []
     tmp_y = row_y
     for conn in connections:
-        if tmp_y + block_h > y + h - 4:
+        if tmp_y + block_h > y + h - 10:
             break
         visible.append(conn)
         tmp_y += block_h
@@ -340,8 +358,6 @@ def _draw_hsl(draw: ImageDraw.Draw, data: dict | None, x: int, y: int, w: int, h
             _text(draw, (x + w - PAD, row_y + row_h1), stop_str, FONT_TINY, fill=GRAY, anchor="ra")
 
         row_y += block_h
-        if i < len(visible) - 1:
-            _divider(draw, x + PAD, row_y - row_gap // 2, x + w - PAD)
 
 
 def _draw_daycare(draw: ImageDraw.Draw, data: dict | None, x: int, y: int, w: int, h: int):
@@ -356,10 +372,10 @@ def _draw_daycare(draw: ImageDraw.Draw, data: dict | None, x: int, y: int, w: in
 
     events = data.get("events", [])
     if not events:
-        _text(draw, (x + PAD, title_y + 30), "Ei tulevia tapahtumia", FONT_SMALL, fill=GRAY)
+        _text(draw, (x + PAD, title_y + 38), "Ei tulevia tapahtumia", FONT_SMALL, fill=GRAY)
         return
 
-    event_y = title_y + 30
+    event_y = title_y + 38
     row_h1  = 22   # title row height
     row_h2  = 18   # description row height
     row_gap = 8    # gap to next event
@@ -368,7 +384,7 @@ def _draw_daycare(draw: ImageDraw.Draw, data: dict | None, x: int, y: int, w: in
     visible = []
     tmp_y = event_y
     for ev in events:
-        if tmp_y + block_h > y + h - 4:
+        if tmp_y + block_h > y + h - 10:
             break
         visible.append(ev)
         tmp_y += block_h
@@ -393,26 +409,24 @@ def _draw_daycare(draw: ImageDraw.Draw, data: dict | None, x: int, y: int, w: in
             _text(draw, (x + PAD, event_y + row_h1), desc[:42], FONT_TINY, fill=GRAY)
 
         event_y += block_h
-        if i < len(visible) - 1:
-            _divider(draw, x + PAD, event_y - row_gap // 2, x + w - PAD)
 
 
 def _draw_waste(draw: ImageDraw.Draw, data: dict | None, x: int, y: int, w: int, h: int):
     title_y = y + PAD
-    _text(draw, (x + PAD, title_y), "JÄTTEET", FONT_LARGE)
+    _text(draw, (x + PAD, title_y), "JÄTEHUOLTO", FONT_LARGE)
     if data and data.get("_stale"):
-        _stale_mark(draw, x + PAD + 110, title_y)
+        _stale_mark(draw, x + PAD + 140, title_y)
 
     if not data:
-        _text(draw, (x + PAD, title_y + 34), "Ei saatavilla", FONT_MED, fill=GRAY)
+        _text(draw, (x + PAD, title_y + 38), "Ei saatavilla", FONT_MED, fill=GRAY)
         return
 
     collections = data.get("next_collections", [])
     if not collections:
-        _text(draw, (x + PAD, title_y + 34), "Ei tietoja", FONT_SMALL, fill=GRAY)
+        _text(draw, (x + PAD, title_y + 38), "Ei tietoja", FONT_SMALL, fill=GRAY)
         return
 
-    item_y = title_y + 34
+    item_y = title_y + 38
     line_h = 38
     for col in collections[:4]:
         if item_y + line_h > y + h - PAD:

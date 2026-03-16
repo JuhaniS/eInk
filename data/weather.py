@@ -68,8 +68,12 @@ def fetch(config: dict, use_cache: bool = True) -> dict:
         return _load_cache()
 
     loc = config.get("location", {})
-    lat = loc.get("latitude", 60.1699)
-    lon = loc.get("longitude", 24.9384)
+    lat = loc.get("latitude")
+    lon = loc.get("longitude")
+    if lat is None or lon is None:
+        raise DataFetchError(
+            "location.latitude and location.longitude are required in config.yaml"
+        )
 
     params = {
         "latitude": lat,

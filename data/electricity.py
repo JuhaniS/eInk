@@ -33,7 +33,8 @@ def _save_cache(data: dict):
 
 
 def fetch(config: dict, use_cache: bool = True) -> dict:
-    ttl = config.get("cache", {}).get("ttl_minutes", 55)
+    ttl = config.get("cache", {}).get("electricity_ttl_minutes",
+          config.get("cache", {}).get("ttl_minutes", 720))
 
     if use_cache and _cache_is_fresh(ttl):
         return _load_cache()

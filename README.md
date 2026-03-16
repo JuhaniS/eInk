@@ -116,8 +116,10 @@ The display driver is selected automatically by platform:
 Install the Waveshare Python library on the Pi, then run via cron:
 
 ```cron
-*/55 * * * * cd /home/pi/eInk && venv/bin/python main.py >> cache/error.log 2>&1
+*/10 * * * * cd /home/pi/eInk && venv/bin/python main.py >> cache/error.log 2>&1
 ```
+
+Each module refreshes at its own pace regardless of how often cron runs — see `cache:` section in `config.yaml`.
 
 ## Project structure
 

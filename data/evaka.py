@@ -150,7 +150,8 @@ def _parse_events(raw: list, today: date, end: date) -> list[dict]:
 # ── Public interface ────────────────────────────────────────────────────────
 
 def fetch(config: dict, use_cache: bool = True) -> dict:
-    ttl = config.get("cache", {}).get("ttl_minutes", 55)
+    ttl = config.get("cache", {}).get("evaka_ttl_minutes",
+          config.get("cache", {}).get("ttl_minutes", 1440))
 
     if use_cache and _cache_is_fresh(ttl):
         return _load_cache()
