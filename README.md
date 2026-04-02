@@ -2,20 +2,18 @@
 
 A home dashboard for a Waveshare 7.5" e-ink display (800×480), running on a Raspberry Pi. Displays weather, calendar events, news headlines, waste collection schedule, daycare events, and public transit departures.
 
-![Dashboard layout](output/dashboard.png)
-
 ## Layout
 
 ```
-┌──────────────────────────────────────────────────────────┐
-│  KOTINÄKYMÄ                              ke 2.4.2026     │  header
-├──────────────────┬──────────────────┬────────────────────┤
-│  PÄIVÄKOTI       │  KALENTERI       │  SÄÄ              │
-│  Daycare events  │  Calendar events │  Weather           │
-├──────────────────┼──────────────────┼────────────────────┤
-│  UUTISET         │  HSL             │  JÄTEHUOLTO       │
-│  News headlines  │  Transit         │  Waste schedule    │
-└──────────────────┴──────────────────┴────────────────────┘
+┌──────────────────┬──────────────────┬──────────────────┐
+│  PÄIVÄKOTI       │  KALENTERI       │  SÄÄ + PVM/KELLO │
+│  Daycare events  │  Calendar events │  Weather         │
+├──────────────────┼──────────────────┼──────────────────┤
+│  SÄHKÖ           │  HSL             │  JÄTEHUOLTO      │
+│  Electricity     │  Transit         │  Waste schedule  │
+├──────────────────┴──────────────────┴──────────────────┤
+│  UUTISET  (full width, 2 headlines)                    │
+└────────────────────────────────────────────────────────┘
 ```
 
 ## Hardware
@@ -23,13 +21,12 @@ A home dashboard for a Waveshare 7.5" e-ink display (800×480), running on a Ras
 | Part | Model | Notes |
 |---|---|---|
 | Display | Waveshare 7.5" e-Paper HAT V2 (800×480) | Black/white |
-| Computer | Raspberry Pi 3 Model B (or newer) | Needs 40-pin GPIO header |
+| Computer | Raspberry Pi Zero 2 W (or any Pi with 40-pin GPIO) | Needs pre-soldered headers |
 | Power | 5V micro-USB charger, ≥1A | Standard phone charger works |
 
 > **Important:** The Raspberry Pi Zero 2 W is sold both with and without GPIO headers.
 > The Waveshare HAT has a female connector and requires **male pins** on the Pi.
-> If you buy a Pi Zero 2 W, make sure it is the **"with headers" (WH) version** or solder a 2×20 male header yourself.
-> The Pi 3 Model B comes with headers pre-soldered.
+> Make sure to buy the **"with headers" (WH) version**, or solder a 2×20 male header yourself.
 
 ## Data sources
 
