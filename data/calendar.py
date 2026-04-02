@@ -159,7 +159,7 @@ def fetch(config: dict, use_cache: bool = True) -> dict:
         ev.pop("end_time", None)
 
     data = {
-        "events":     all_events[:5],
+        "events":     all_events[:8],
         "fetched_at": datetime.now().isoformat(timespec="seconds"),
     }
     _save_cache(data)

@@ -47,28 +47,29 @@ def _load_font(size: int, bold: bool = False) -> ImageFont.FreeTypeFont:
 # ── Constants ────────────────────────────────────────────────────────────────
 
 WIDTH, HEIGHT = 800, 480
-BG      = 255   # white
-FG      = 0     # black
-GRAY    = 80    # dark gray for secondary text
-DIVIDER = 180   # light gray for grid lines
+BG      = 0     # black
+FG      = 255   # white
+GRAY    = 255   # white (same as FG inverse — all text white on black)
+DIVIDER = 80    # dark gray for grid lines
 
 PAD = 12   # cell padding
 
-# Grid: 3 equal columns, 2 rows, dark header
-HEADER_H = 46
-COL_W    = (WIDTH - 2) // 3     # ≈ 266 px  (2 px for dividers)
-COL2_X   = COL_W + 1            # 267
-COL3_X   = COL_W * 2 + 2        # 534
-ROW_H    = (HEIGHT - HEADER_H) // 2  # 217 px
-ROW2_Y   = HEADER_H + ROW_H          # 263
+# Grid: 3 equal columns × 2 rows + full-width news strip at bottom
+NEWS_H = 140
+COL_W  = (WIDTH - 2) // 3          # ≈ 266 px  (2 px for dividers)
+COL2_X = COL_W + 1                 # 267
+COL3_X = COL_W * 2 + 2             # 534
+ROW_H  = (HEIGHT - NEWS_H) // 2    # 170 px
+ROW2_Y = ROW_H                     # 170
+NEWS_Y = ROW_H * 2                 # 340
 
 # Fonts
 FONT_HUGE   = _load_font(52, bold=True)   # temperature, kWh value
 FONT_LARGE  = _load_font(28, bold=True)   # HSL departure times
-FONT_MED    = _load_font(20, bold=True)   # event titles, waste types
-FONT_SMALL  = _load_font(16)              # detail rows
-FONT_TINY   = _load_font(13)              # gray secondary text
-FONT_LABEL  = _load_font(11)             # section labels
+FONT_MED    = _load_font(18, bold=True)   # event titles, waste types
+FONT_SMALL  = _load_font(17, bold=True)   # detail rows
+FONT_TINY   = _load_font(14, bold=True)   # secondary text
+FONT_LABEL  = _load_font(12)              # section labels
 FONT_HEADER = _load_font(22, bold=True)   # header "KOTINÄKYMÄ"
 
 
@@ -145,6 +146,51 @@ def _date_str(iso: str, weekday: bool = False) -> str:
 
 # ── Weather icons (geometric, drawn with Pillow) ─────────────────────────────
 
+def _draw_mode_icon(draw: ImageDraw.Draw, x: int, y: int, mode: str, size: int = 14, fill=FG):
+    """Draws a small geometric transport mode icon. Top-left corner at (x, y)."""
+    w, h = size, size
+    r = max(2, size // 7)   # wheel radius
+
+    if mode == "BUS":
+        # Squat rectangle body + two wheels
+        draw.rectangle([x, y + 1, x + w, y + h - r * 2 - 1], fill=fill)
+        draw.ellipse([x + 1,         y + h - r * 2, x + 1 + r * 2,     y + h], fill=fill)
+        draw.ellipse([x + w - r * 2, y + h - r * 2, x + w,              y + h], fill=fill)
+
+    elif mode == "TRAM":
+        # Like bus but with a thin overhead wire bar on top
+        draw.rectangle([x + 2, y,     x + w - 2, y + 2],              fill=fill)  # pantograph
+        draw.rectangle([x,     y + 3, x + w,     y + h - r * 2 - 1], fill=fill)  # body
+        draw.ellipse([x + 1,         y + h - r * 2, x + 1 + r * 2, y + h], fill=fill)
+        draw.ellipse([x + w - r * 2, y + h - r * 2, x + w,          y + h], fill=fill)
+
+    elif mode in ("RAIL", "SUBWAY"):
+        # Locomotive silhouette: rectangle with pointed nose on the right
+        nose_x = x + w
+        mid_y  = y + h // 2
+        body = [
+            (x,          y + 1),
+            (nose_x - 3, y + 1),
+            (nose_x,     mid_y),
+            (nose_x - 3, y + h - r * 2 - 1),
+            (x,          y + h - r * 2 - 1),
+        ]
+        draw.polygon(body, fill=fill)
+        draw.ellipse([x + 2,         y + h - r * 2, x + 2 + r * 2,     y + h], fill=fill)
+        draw.ellipse([x + w - r * 2 - 3, y + h - r * 2, x + w - 3, y + h], fill=fill)
+
+    elif mode == "FERRY":
+        # Boat hull (trapezoid) + small deck rectangle
+        mid_y = y + h // 2
+        hull  = [(x, mid_y), (x + 2, y + h), (x + w - 2, y + h), (x + w, mid_y)]
+        draw.polygon(hull, fill=fill)
+        draw.rectangle([x + 3, y + 2, x + w - 3, mid_y], fill=fill)
+
+    else:
+        # Unknown: simple square
+        draw.rectangle([x, y + 2, x + w, y + h - 2], fill=fill)
+
+
 def _cloud(draw: ImageDraw.Draw, ox: int, oy: int, s: int, fill=FG):
     w, h = s, s
     draw.ellipse([ox + int(0.12*w), oy + int(0.52*h), ox + int(0.52*w), oy + int(0.82*h)], fill=fill)
@@ -219,6 +265,14 @@ def _draw_weather(draw: ImageDraw.Draw, data: dict | None,
                   x: int, y: int, w: int, h: int):
     cy = _label(draw, x, y, "SÄÄ", stale=bool(data and data.get("_stale")))
 
+    # Date & time in top-right corner
+    now      = datetime.now()
+    day_abbr = _DAYS_FI[now.weekday()]
+    date_str = f"{day_abbr} {now.day}.{now.month}."
+    time_str = now.strftime("%H:%M")
+    _text(draw, (x + w - PAD, y + PAD),      time_str, FONT_SMALL, fill=GRAY, anchor="ra")
+    _text(draw, (x + w - PAD, y + PAD + 18), date_str, FONT_TINY,  fill=GRAY, anchor="ra")
+
     if not data:
         _text(draw, (x + PAD, cy), "Ei saatavilla", FONT_SMALL, fill=GRAY)
         return
@@ -262,39 +316,42 @@ def _draw_weather(draw: ImageDraw.Draw, data: dict | None,
 
 def _draw_news(draw: ImageDraw.Draw, data: dict | None,
                x: int, y: int, w: int, h: int):
+    """Full-width news strip showing 2 items side by side."""
     label = (data.get("label", "UUTISET") if data else "UUTISET")
-    cy    = _label(draw, x, y, label, stale=bool(data and data.get("_stale")))
+    _label(draw, x, y, label, stale=bool(data and data.get("_stale")))
+    content_y = y + PAD + 16
 
     if not data:
-        _text(draw, (x + PAD, cy), "Ei saatavilla", FONT_SMALL, fill=GRAY)
+        _text(draw, (x + PAD, content_y), "Ei saatavilla", FONT_SMALL, fill=GRAY)
         return
 
-    items = data.get("items", [])
+    items = data.get("items", [])[:2]
     if not items:
-        _text(draw, (x + PAD, cy), "Ei uutisia", FONT_TINY, fill=GRAY)
+        _text(draw, (x + PAD, content_y), "Ei uutisia", FONT_TINY, fill=GRAY)
         return
 
     max_w   = w - 2 * PAD
-    line_h1 = 18   # FONT_SMALL line height
-    line_h2 = 15   # FONT_TINY line height
-    gap     = 8    # gap between news items
+    line_h1 = 19   # title line height (FONT_SMALL)
+    line_h2 = 15   # description line height (FONT_LABEL)
+    gap     = 8    # gap between items
+    cy      = content_y
 
     for item in items:
+        if cy + line_h1 > y + h - PAD:
+            break
         title = item.get("title", "")
         desc  = item.get("description", "")
 
         title_lines = _wrap_text(draw, title, FONT_SMALL, max_w)[:2]
-        desc_lines  = _wrap_text(draw, desc,  FONT_TINY,  max_w)[:2] if desc else []
-
-        block_h = len(title_lines) * line_h1 + len(desc_lines) * line_h2 + gap
-        if cy + block_h > y + h - PAD:
-            break
+        desc_lines  = _wrap_text(draw, desc,  FONT_LABEL, max_w)[:2] if desc else []
 
         for line in title_lines:
             _text(draw, (x + PAD, cy), line, FONT_SMALL, fill=FG)
             cy += line_h1
         for line in desc_lines:
-            _text(draw, (x + PAD, cy), line, FONT_TINY, fill=GRAY)
+            if cy + line_h2 > y + h - PAD:
+                break
+            _text(draw, (x + PAD, cy), line, FONT_LABEL, fill=GRAY)
             cy += line_h2
         cy += gap
 
@@ -347,9 +404,9 @@ def _draw_calendar(draw: ImageDraw.Draw, data: dict | None,
         _text(draw, (x + PAD, cy), "Ei tulevia tapahtumia", FONT_TINY, fill=GRAY)
         return
 
-    row_h1  = 16   # date+time row
-    row_h2  = 22   # title row
-    row_gap = 10   # gap between events
+    row_h1  = 15   # date+time row
+    row_h2  = 21   # title row
+    row_gap = 6    # gap between events
     block_h = row_h1 + row_h2 + row_gap
 
     for ev in events:
@@ -386,20 +443,19 @@ def _draw_hsl(draw: ImageDraw.Draw, data: dict | None,
     mins  = first.get("minutes_until", 0)
     lines = first.get("lines", "")
     walk  = first.get("walk_minutes", 0)
-    stop  = first.get("first_stop", "")
+    mode  = first.get("first_mode", "")
     fdep  = first.get("first_depart", "")
 
     time_str  = f"{dep}->{arr}" if arr else dep
     mins_str  = f"Lähtöön {mins} min" if mins > 0 else "Lähdettävä nyt"
     route_str = (f"{walk}min -> {lines}" if walk else lines).strip()
-    stop_str  = f"{stop} {fdep}".strip() if stop else ""
 
-    _text(draw, (x + PAD, cy), time_str, FONT_LARGE)
-    cy += 34
+    _text(draw, (x + PAD, cy), time_str, FONT_MED)
+    cy += 26
 
-    _text(draw, (x + PAD, cy), route_str, FONT_TINY, fill=GRAY)
-    if stop_str:
-        _text(draw, (x + w - PAD, cy), stop_str, FONT_TINY, fill=GRAY, anchor="ra")
+    _text(draw, (x + PAD,     cy), route_str, FONT_TINY, fill=GRAY)
+    if fdep:
+        _text(draw, (x + w - PAD, cy), fdep, FONT_TINY, fill=GRAY, anchor="ra")
     cy += 18
 
     # Minutes-until badge
@@ -420,20 +476,19 @@ def _draw_hsl(draw: ImageDraw.Draw, data: dict | None,
         mins2  = conn.get("minutes_until", 0)
         lines2 = conn.get("lines", "")
         walk2  = conn.get("walk_minutes", 0)
-        stop2  = conn.get("first_stop", "")
+        mode2  = conn.get("first_mode", "")
         fdep2  = conn.get("first_depart", "")
 
-        t2     = f"{dep2}->{arr2}" if arr2 else dep2
-        m2     = f"{mins2} min" if mins2 > 0 else "Nyt"
-        r2     = (f"{walk2}min -> {lines2}" if walk2 else lines2).strip()
-        s2     = f"{stop2} {fdep2}".strip() if stop2 else ""
+        t2 = f"{dep2}->{arr2}" if arr2 else dep2
+        m2 = f"{mins2} min" if mins2 > 0 else "Nyt"
+        r2 = (f"{walk2}min -> {lines2}" if walk2 else lines2).strip()
 
         _text(draw, (x + PAD,     cy), t2, FONT_SMALL)
         _text(draw, (x + w - PAD, cy), m2, FONT_SMALL, anchor="ra")
         cy += row_h1
-        _text(draw, (x + PAD,     cy), r2, FONT_TINY, fill=GRAY)
-        if s2:
-            _text(draw, (x + w - PAD, cy), s2, FONT_TINY, fill=GRAY, anchor="ra")
+        _text(draw, (x + PAD,     cy), r2,   FONT_TINY, fill=GRAY)
+        if fdep2:
+            _text(draw, (x + w - PAD, cy), fdep2, FONT_TINY, fill=GRAY, anchor="ra")
         cy += row_h2 + row_gap
 
 
@@ -515,13 +570,14 @@ def _draw_header(draw: ImageDraw.Draw, width: int):
     date_str = f"{day_abbr} {now.day}.{now.month}.{now.year}"
     time_str = now.strftime("%H:%M")
 
-    mid_y = HEADER_H // 2
-    _text(draw, (PAD,         mid_y), "KOTINÄKYMÄ", FONT_HEADER, fill=BG, anchor="lm")
-    _text(draw, (width - PAD, mid_y), date_str,     FONT_SMALL,  fill=BG, anchor="rm")
+    mid_y    = HEADER_H // 2
+    hdr_fg   = BG        # header text is always the inverse of the background
+    _text(draw, (PAD,         mid_y), "KOTINÄKYMÄ", FONT_HEADER, fill=hdr_fg, anchor="lm")
+    _text(draw, (width - PAD, mid_y), date_str,     FONT_SMALL,  fill=hdr_fg, anchor="rm")
     # Time slightly left of the date — measure date width first
     date_bbox = draw.textbbox((0, 0), date_str, font=FONT_SMALL)
     date_w    = date_bbox[2] - date_bbox[0]
-    _text(draw, (width - PAD - date_w - 14, mid_y), time_str, FONT_SMALL, fill=BG, anchor="rm")
+    _text(draw, (width - PAD - date_w - 14, mid_y), time_str, FONT_SMALL, fill=hdr_fg, anchor="rm")
 
 
 # ── Main render function ─────────────────────────────────────────────────────
@@ -554,22 +610,23 @@ def render(
     img  = Image.new("L", (width, height), BG)
     draw = ImageDraw.Draw(img)
 
-    # Header
-    _draw_header(draw, width)
-
-    # Grid lines
-    _vertical_divider(draw, COL_W,       HEADER_H, height)
-    _vertical_divider(draw, COL_W * 2 + 1, HEADER_H, height)
+    # Grid lines — 3 columns × 2 rows + full-width news strip
+    _vertical_divider(draw, COL_W,       0, NEWS_Y)
+    _vertical_divider(draw, COL_W * 2 + 1, 0, NEWS_Y)
     _divider(draw, 0, ROW2_Y, width)
+    _divider(draw, 0, NEWS_Y,  width)
 
-    # Row 1: daycare | calendar | weather
-    _draw_daycare (draw, daycare,  0,      HEADER_H, COL_W,          ROW_H)
-    _draw_calendar(draw, calendar, COL2_X, HEADER_H, COL_W,          ROW_H)
-    _draw_weather (draw, weather,  COL3_X, HEADER_H, width - COL3_X, ROW_H)
+    # Row 1: daycare | calendar | weather+datetime
+    _draw_daycare (draw, daycare,     0,      0,      COL_W,          ROW_H)
+    _draw_calendar(draw, calendar,    COL2_X, 0,      COL_W,          ROW_H)
+    _draw_weather (draw, weather,     COL3_X, 0,      width - COL3_X, ROW_H)
 
-    # Row 2: news | hsl | waste
-    _draw_news (draw, news,  0,      ROW2_Y, COL_W,          ROW_H)
-    _draw_hsl  (draw, hsl,   COL2_X, ROW2_Y, COL_W,          ROW_H)
-    _draw_waste(draw, waste,  COL3_X, ROW2_Y, width - COL3_X, ROW_H)
+    # Row 2: electricity | hsl | waste
+    _draw_electricity(draw, electricity, 0,      ROW2_Y, COL_W,          ROW_H)
+    _draw_hsl        (draw, hsl,         COL2_X, ROW2_Y, COL_W,          ROW_H)
+    _draw_waste      (draw, waste,       COL3_X, ROW2_Y, width - COL3_X, ROW_H)
+
+    # Row 3: full-width news strip
+    _draw_news(draw, news, 0, NEWS_Y, width, NEWS_H)
 
     return img

@@ -238,6 +238,7 @@ def fetch(config: dict, use_cache: bool = True) -> dict:
             "lines":          lines_str,
             "to":             to_name,
             "walk_minutes":   walk_minutes,
+            "first_mode":     first_mode,
             "first_stop":     first_stop,
             "first_depart":   first_depart_str,
         })

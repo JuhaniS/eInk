@@ -117,14 +117,18 @@ def _fetch_raw(s: requests.Session, base_url: str, start: date, end: date) -> li
 
 # ── Conversion to standard format ──────────────────────────────────────────
 
-_AFTERNOON_CUTOFF_HOUR = 17   # after this hour, skip today and show tomorrow onwards
+_AFTERNOON_CUTOFF_HOUR = 18   # after this hour, skip today and show tomorrow onwards
+
+
+def _apply_cutoff(events: list) -> list:
+    """Filters out today's events if it's past the cutoff hour."""
+    min_date = date.today()
+    if datetime.now().hour >= _AFTERNOON_CUTOFF_HOUR:
+        min_date = min_date + timedelta(days=1)
+    return [e for e in events if e.get("date", "") >= min_date.isoformat()]
 
 
 def _parse_events(raw: list, today: date, end: date) -> list[dict]:
-    # After 17:00 the day is effectively over for daycare purposes
-    min_date = today
-    if datetime.now().hour >= _AFTERNOON_CUTOFF_HOUR:
-        min_date = today + timedelta(days=1)
 
     events = []
     for ev in raw:
@@ -136,7 +140,7 @@ def _parse_events(raw: list, today: date, end: date) -> list[dict]:
             ev_date = date.fromisoformat(start_str)
         except ValueError:
             continue
-        if not (min_date <= ev_date <= end):
+        if not (today <= ev_date <= end):
             continue
 
         title = ev.get("title", "")
@@ -162,7 +166,10 @@ def fetch(config: dict, use_cache: bool = True) -> dict:
           config.get("cache", {}).get("ttl_minutes", 1440))
 
     if use_cache and _cache_is_fresh(ttl):
-        return _load_cache()
+        cached = _load_cache()
+        if cached:
+            cached["events"] = _apply_cutoff(cached.get("events", []))
+        return cached
 
     evaka_cfg = config.get("evaka", {})
     username  = evaka_cfg.get("username", "")
@@ -194,7 +201,7 @@ def fetch(config: dict, use_cache: bool = True) -> dict:
         s   = _login(base_url, username, password)
         raw = _fetch_raw(s, base_url, today, end)
 
-    events = _parse_events(raw, today, end)
+    events = _apply_cutoff(_parse_events(raw, today, end))
     data   = {
         "events":     events,
         "fetched_at": datetime.now().isoformat(timespec="seconds"),
