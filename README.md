@@ -1,23 +1,35 @@
 # E-ink Dashboard
 
-A home dashboard for a Waveshare 7.5" e-ink display (800×480), running on a Raspberry Pi. Displays weather, calendar events, electricity consumption, waste collection schedule, daycare events, and public transit departures.
+A home dashboard for a Waveshare 7.5" e-ink display (800×480), running on a Raspberry Pi. Displays weather, calendar events, news headlines, waste collection schedule, daycare events, and public transit departures.
 
 ![Dashboard layout](output/dashboard.png)
 
 ## Layout
 
 ```
-┌─────────────────────┬─────────────────────┐
-│  PÄIVÄKOTI          │  KALENTERI          │
-│  Daycare events     │  Calendar events    │
-├─────────────────────┼─────────────────────┤
-│  SÄHKÖ              │  HSL                │
-│  Electricity usage  │  Transit departures │
-├─────────────────────┼─────────────────────┤
-│  SÄÄ                │  JÄTTEET            │
-│  Weather            │  Waste schedule     │
-└─────────────────────┴─────────────────────┘
+┌──────────────────────────────────────────────────────────┐
+│  KOTINÄKYMÄ                              ke 2.4.2026     │  header
+├──────────────────┬──────────────────┬────────────────────┤
+│  PÄIVÄKOTI       │  KALENTERI       │  SÄÄ              │
+│  Daycare events  │  Calendar events │  Weather           │
+├──────────────────┼──────────────────┼────────────────────┤
+│  UUTISET         │  HSL             │  JÄTEHUOLTO       │
+│  News headlines  │  Transit         │  Waste schedule    │
+└──────────────────┴──────────────────┴────────────────────┘
 ```
+
+## Hardware
+
+| Part | Model | Notes |
+|---|---|---|
+| Display | Waveshare 7.5" e-Paper HAT V2 (800×480) | Black/white |
+| Computer | Raspberry Pi 3 Model B (or newer) | Needs 40-pin GPIO header |
+| Power | 5V micro-USB charger, ≥1A | Standard phone charger works |
+
+> **Important:** The Raspberry Pi Zero 2 W is sold both with and without GPIO headers.
+> The Waveshare HAT has a female connector and requires **male pins** on the Pi.
+> If you buy a Pi Zero 2 W, make sure it is the **"with headers" (WH) version** or solder a 2×20 male header yourself.
+> The Pi 3 Model B comes with headers pre-soldered.
 
 ## Data sources
 
@@ -25,12 +37,12 @@ A home dashboard for a Waveshare 7.5" e-ink display (800×480), running on a Ras
 |---|---|---|
 | Weather | [Open-Meteo](https://open-meteo.com/) | None |
 | Calendar | Google Calendar iCal | Secret URL token |
-| Electricity | Caruna via [pycaruna](https://github.com/tikonen/pycaruna) | Username + password |
+| News | YLE Uutiset RSS | None |
 | Waste | Manual schedule in config | None |
 | Daycare | Espoo eVaka (`/api/citizen/auth/weak-login`) | Username + password |
 | Transit | [HSL Digitransit v2 GraphQL](https://portal-api.digitransit.fi/) | API key |
 
-## Setup
+## Development setup (macOS)
 
 ### 1. Clone and create virtualenv
 
@@ -90,7 +102,7 @@ calendars:
 
 Register at [portal-api.digitransit.fi](https://portal-api.digitransit.fi/) and create a subscription for the Routing API. Add the key to `config.yaml`.
 
-## Running
+### 5. Run
 
 ```bash
 source venv/bin/activate
@@ -108,18 +120,73 @@ python main.py --only hsl --no-cache
 
 ## Raspberry Pi deployment
 
-The display driver is selected automatically by platform:
+### 1. Flash SD card
 
-- **macOS / Linux x86**: saves `output/dashboard.png`
-- **Linux aarch64** (Raspberry Pi): drives the Waveshare 7.5" v2 e-paper display
+Use [Raspberry Pi Imager](https://www.raspberrypi.com/software/):
+- OS: Raspberry Pi OS Lite (64-bit)
+- Enable SSH, set username/password, configure WiFi (country: FI)
 
-Install the Waveshare Python library on the Pi, then run via cron:
+### 2. Connect display
 
-```cron
-*/10 * * * * cd /home/pi/eInk && venv/bin/python main.py >> cache/error.log 2>&1
+Attach the Waveshare HAT to the 40-pin GPIO header with the Pi powered off.
+
+### 3. Enable SPI
+
+```bash
+ssh pi@eink.local
+sudo raspi-config   # Interface Options → SPI → Enable
+sudo reboot
 ```
 
-Each module refreshes at its own pace regardless of how often cron runs — see `cache:` section in `config.yaml`.
+### 4. Install dependencies
+
+```bash
+# Waveshare e-Paper library
+git clone https://github.com/waveshare/e-Paper.git
+
+# Project
+git clone <repo> eInk
+cd eInk
+python3 -m venv venv
+venv/bin/pip install ~/e-Paper/RaspberryPi_JetsonNano/python
+venv/bin/pip install -r requirements.txt
+
+# System libraries required by the GPIO stack
+sudo apt install -y swig liblgpio-dev
+venv/bin/pip install spidev gpiozero lgpio
+```
+
+### 5. Copy config
+
+```bash
+# From Mac:
+scp config.yaml pi@eink.local:~/eInk/
+```
+
+### 6. Test
+
+```bash
+venv/bin/python main.py
+```
+
+### 7. Set up cron
+
+```bash
+crontab -e
+```
+
+Add:
+```
+@reboot cd /home/pi/eInk && venv/bin/python main.py >> /tmp/eink.log 2>&1
+*/10 * * * * cd /home/pi/eInk && venv/bin/python main.py >> /tmp/eink.log 2>&1
+```
+
+### Sync changes from Mac to Pi
+
+```bash
+rsync -av --exclude venv --exclude cache --exclude output \
+  /path/to/eInk/ pi@eink.local:~/eInk/
+```
 
 ## Project structure
 
@@ -132,17 +199,28 @@ eInk/
 ├── data/
 │   ├── weather.py       # Open-Meteo
 │   ├── calendar.py      # iCal / Google Calendar
+│   ├── news.py          # YLE RSS feed
 │   ├── electricity.py   # Caruna / pycaruna
 │   ├── waste.py         # Manual waste schedule
 │   ├── evaka.py         # Espoo daycare (eVaka)
 │   └── hsl.py           # HSL Digitransit transit
 ├── display/
-│   ├── simulator.py     # PNG output for development
-│   └── epaper.py        # Waveshare 7.5" v2 driver
+│   ├── simulator.py     # PNG output for macOS development
+│   └── epaper.py        # Waveshare 7.5" v2 driver (Raspberry Pi)
+├── fonts/               # Optional: place Inter-Regular.ttf + Inter-Bold.ttf here
 ├── cache/               # JSON cache files (auto-generated)
-└── output/              # Output image (auto-generated)
+└── output/              # Output PNG (auto-generated, macOS only)
 ```
 
 ## Caching
 
-Each module writes a JSON cache file under `cache/`. The default TTL is 55 minutes (slightly under one hour so a cron job running every hour always fetches fresh data). Transit data uses a 3-minute TTL. Stale cache is used as a fallback when an API call fails.
+Each module writes a JSON cache file under `cache/`. TTLs are configurable per module in `config.yaml`. Stale cache is used as a fallback when an API call fails — the dashboard always shows something even when offline.
+
+```yaml
+cache:
+  ttl_minutes: 55           # weather, calendar
+  hsl_ttl_minutes: 10       # real-time transit
+  hsl_active_hours: [6, 22] # no HSL fetches outside these hours
+  evaka_ttl_minutes: 1440   # daycare: once per day
+  electricity_ttl_minutes: 720
+```

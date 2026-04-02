@@ -87,3 +87,14 @@ cache:
   hsl_active_hours: [6, 22]     # HSL API only called between these hours
   evaka_ttl_minutes: 1440       # daycare: once per day
   electricity_ttl_minutes: 720  # electricity: twice per day
+
+# ── News ──────────────────────────────────────────────────────────────────────
+# Reads any RSS feed. Defaults to YLE major headlines (no credentials needed).
+# Other YLE feeds:
+#   https://feeds.yle.fi/uutiset/v1/recent.rss?publisherIds=YLE_UUTISET  (latest)
+#   https://feeds.yle.fi/uutiset/v1/recent.rss?publisherIds=YLE_URHEILU  (sports)
+news:
+  url: "https://feeds.yle.fi/uutiset/v1/majorHeadlines/YLE_UUTISET.rss"
+  num_items: 3       # 1–5
+  label: "UUTISET"  # section header shown on the dashboard
+  ttl_minutes: 30

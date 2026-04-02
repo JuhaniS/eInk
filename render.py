@@ -49,7 +49,7 @@ def _load_font(size: int, bold: bool = False) -> ImageFont.FreeTypeFont:
 WIDTH, HEIGHT = 800, 480
 BG      = 255   # white
 FG      = 0     # black
-GRAY    = 150   # mid-gray for secondary text
+GRAY    = 80    # dark gray for secondary text
 DIVIDER = 180   # light gray for grid lines
 
 PAD = 12   # cell padding
@@ -84,6 +84,30 @@ def _divider(draw: ImageDraw.Draw, x1: int, y: int, x2: int):
 
 def _vertical_divider(draw: ImageDraw.Draw, x: int, y1: int, y2: int):
     draw.line([(x, y1), (x, y2)], fill=DIVIDER, width=1)
+
+
+def _wrap_text(draw: ImageDraw.Draw, text: str, font, max_width: int) -> list[str]:
+    """Word-wraps text to fit within max_width pixels. Returns a list of lines."""
+    words = text.split()
+    lines: list[str] = []
+    current = ""
+    for word in words:
+        candidate = f"{current} {word}".strip()
+        w = draw.textlength(candidate, font=font)
+        if w <= max_width:
+            current = candidate
+        else:
+            if current:
+                lines.append(current)
+            # If a single word is wider than max_width, truncate it with ellipsis
+            if draw.textlength(word, font=font) > max_width:
+                while word and draw.textlength(word + "…", font=font) > max_width:
+                    word = word[:-1]
+                word = word + "…"
+            current = word
+    if current:
+        lines.append(current)
+    return lines
 
 
 def _label(draw: ImageDraw.Draw, x: int, y: int, text: str, stale: bool = False) -> int:
@@ -234,6 +258,45 @@ def _draw_weather(draw: ImageDraw.Draw, data: dict | None,
     if hi is not None and lo is not None:   row3.append(f"{lo:.0f}°-{hi:.0f}°")
     if row3:
         _text(draw, (x + PAD, detail_y + 38), "   ".join(row3), FONT_TINY, fill=GRAY)
+
+
+def _draw_news(draw: ImageDraw.Draw, data: dict | None,
+               x: int, y: int, w: int, h: int):
+    label = (data.get("label", "UUTISET") if data else "UUTISET")
+    cy    = _label(draw, x, y, label, stale=bool(data and data.get("_stale")))
+
+    if not data:
+        _text(draw, (x + PAD, cy), "Ei saatavilla", FONT_SMALL, fill=GRAY)
+        return
+
+    items = data.get("items", [])
+    if not items:
+        _text(draw, (x + PAD, cy), "Ei uutisia", FONT_TINY, fill=GRAY)
+        return
+
+    max_w   = w - 2 * PAD
+    line_h1 = 18   # FONT_SMALL line height
+    line_h2 = 15   # FONT_TINY line height
+    gap     = 8    # gap between news items
+
+    for item in items:
+        title = item.get("title", "")
+        desc  = item.get("description", "")
+
+        title_lines = _wrap_text(draw, title, FONT_SMALL, max_w)[:2]
+        desc_lines  = _wrap_text(draw, desc,  FONT_TINY,  max_w)[:2] if desc else []
+
+        block_h = len(title_lines) * line_h1 + len(desc_lines) * line_h2 + gap
+        if cy + block_h > y + h - PAD:
+            break
+
+        for line in title_lines:
+            _text(draw, (x + PAD, cy), line, FONT_SMALL, fill=FG)
+            cy += line_h1
+        for line in desc_lines:
+            _text(draw, (x + PAD, cy), line, FONT_TINY, fill=GRAY)
+            cy += line_h2
+        cy += gap
 
 
 def _draw_electricity(draw: ImageDraw.Draw, data: dict | None,
@@ -470,6 +533,7 @@ def render(
     calendar:    dict | None = None,
     daycare:     dict | None = None,
     hsl:         dict | None = None,
+    news:        dict | None = None,
     width:  int = WIDTH,
     height: int = HEIGHT,
 ) -> Image.Image:
@@ -483,7 +547,7 @@ def render(
       ├──────────────────┬──────────────────┬────────────────────┤
       │  PÄIVÄKOTI       │  KALENTERI       │  SÄÄ              │  ROW 1 (217px)
       ├──────────────────┼──────────────────┼────────────────────┤
-      │  SÄHKÖ           │  HSL             │  JÄTEHUOLTO       │  ROW 2 (217px)
+      │  UUTISET         │  HSL             │  JÄTEHUOLTO       │  ROW 2 (217px)
       └──────────────────┴──────────────────┴────────────────────┘
        COL_W ≈ 266 px each
     """
@@ -503,9 +567,9 @@ def render(
     _draw_calendar(draw, calendar, COL2_X, HEADER_H, COL_W,          ROW_H)
     _draw_weather (draw, weather,  COL3_X, HEADER_H, width - COL3_X, ROW_H)
 
-    # Row 2: electricity | hsl | waste
-    _draw_electricity(draw, electricity, 0,      ROW2_Y, COL_W,          ROW_H)
-    _draw_hsl        (draw, hsl,         COL2_X, ROW2_Y, COL_W,          ROW_H)
-    _draw_waste      (draw, waste,       COL3_X, ROW2_Y, width - COL3_X, ROW_H)
+    # Row 2: news | hsl | waste
+    _draw_news (draw, news,  0,      ROW2_Y, COL_W,          ROW_H)
+    _draw_hsl  (draw, hsl,   COL2_X, ROW2_Y, COL_W,          ROW_H)
+    _draw_waste(draw, waste,  COL3_X, ROW2_Y, width - COL3_X, ROW_H)
 
     return img

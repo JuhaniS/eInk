@@ -67,6 +67,8 @@ def fetch_module(name: str, config: dict, use_cache: bool) -> "dict | None":
             from data.evaka import fetch
         elif name == "hsl":
             from data.hsl import fetch
+        elif name == "news":
+            from data.news import fetch
         else:
             log.error("Unknown module: %s", name)
             return None
@@ -96,7 +98,7 @@ def parse_args():
     )
     parser.add_argument(
         "--only",
-        choices=["weather", "electricity", "waste", "calendar", "evaka", "hsl"],
+        choices=["weather", "electricity", "waste", "calendar", "evaka", "hsl", "news"],
         help="Run only one module (for testing)"
     )
     parser.add_argument(
@@ -145,6 +147,9 @@ def main():
     if config.get("hsl", {}).get("api_key"):
         hsl = fetch_module("hsl", config, use_cache)
 
+    # News – always fetch (uses public RSS, no credentials needed)
+    news = fetch_module("news", config, use_cache)
+
     # Render image
     log.info("Rendering image...")
     from render import render
@@ -155,6 +160,7 @@ def main():
         calendar=calendar,
         daycare=daycare,
         hsl=hsl,
+        news=news,
         width=width,
         height=height,
     )
