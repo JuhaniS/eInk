@@ -5,7 +5,7 @@
 Home dashboard for Waveshare 7.5" e-ink display (800×480px, grayscale).
 Development on macOS (PNG simulation), deployed on Raspberry Pi 3 Model B.
 
-Hardware: Waveshare 7.5" e-Paper HAT V2 + Raspberry Pi 3 Model B (wired, wall-mounted).
+Hardware: Waveshare 7.5" e-Paper HAT V2 + Raspberry Pi Zero 2 W (wired, wall-mounted).
 
 ## Running
 
@@ -155,7 +155,7 @@ Cron runs `main.py` every 10 minutes + `@reboot`; each module decides independen
 
 - [ ] Caruna (pycaruna) returning null kWh — likely Caruna API change, check pycaruna updates
 - [ ] Consider adding forecast strip to weather cell
-- [ ] Pi Zero 2 W with headers would be cleaner physically (Pi 3 works but larger)
+- [ ] Pi Zero 2 W with headers (WH version) would avoid needing to solder headers
 
 ## Git
 
