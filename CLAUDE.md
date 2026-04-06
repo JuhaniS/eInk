@@ -93,7 +93,7 @@ NEWS_Y = 340, no header bar
 
 - **Fonts**: Inter (fonts/ dir) → Futura (macOS) → Helvetica (macOS) → DejaVu (Linux)
 - **Colors**: inverted — BG=0 (black), FG=255 (white), GRAY=255, DIVIDER=80
-- FONT_HUGE=52bold, FONT_LARGE=28bold, FONT_MED=18bold, FONT_SMALL=17bold,
+- FONT_HUGE=52bold, FONT_VLARGE=42bold, FONT_LARGE=28bold, FONT_MED=18bold, FONT_SMALL=17bold,
   FONT_TINY=14bold, FONT_LABEL=12, FONT_HEADER=22bold
 - Section labels: FONT_LABEL gray at top of each cell (`_label()` helper)
 - No dividers between list items (removed for cleaner look)
@@ -129,6 +129,15 @@ cache:
 ```
 
 Cron runs `main.py` every 10 minutes + `@reboot`; each module decides independently.
+
+## Electricity module specifics (data/electricity.py)
+
+- Fetches from Caruna Plus API via pycaruna (username/password in config)
+- Uses `TimeSpan.MONTHLY` to get day-by-day data; data may lag 1–2 days behind today
+- Returns last 7 days of consumption as `daily_kwh`: `[{"date": "YYYY-MM-DD", "kwh": float}, ...]`
+- Cross-month fetch: if 7-day window spans two months, makes a second API call for the prior month
+- `yesterday_kwh` / `yesterday_date` are derived from the most recent entry in `daily_kwh`
+- Rendered with FONT_VLARGE (42px) value + bar chart (7 bars anchored to cell bottom)
 
 ## HSL module specifics (data/hsl.py)
 
@@ -170,7 +179,8 @@ Cron runs `main.py` every 10 minutes + `@reboot`; each module decides independen
 
 ## Known issues / TODO
 
-- [ ] Caruna (pycaruna) returning null kWh — likely Caruna API change, check pycaruna updates
+- [x] Caruna returning null kWh — resolved; now fetches 7-day daily history (`daily_kwh` list)
+- [ ] Consider adding forecast strip to weather cell
 - [ ] Consider adding forecast strip to weather cell
 - [ ] Pi Zero 2 W with headers (WH version) would avoid needing to solder headers
 

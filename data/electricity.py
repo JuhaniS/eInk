@@ -49,6 +49,13 @@ def fetch(config: dict, use_cache: bool = True) -> dict:
         )
 
     yesterday = date.today() - timedelta(days=1)
+    window_start = yesterday - timedelta(days=6)  # 7-day window
+
+    def _collect_entries(energy_list: list, into: dict):
+        for e in energy_list:
+            val = e.get("invoicedConsumption") or e.get("totalConsumption")
+            if val is not None:
+                into[e["timestamp"][:10]] = float(val)  # YYYY-MM-DD -> kWh
 
     try:
         from pycaruna import Authenticator, CarunaPlus, TimeSpan
@@ -73,17 +80,35 @@ def fetch(config: dict, use_cache: bool = True) -> dict:
             yesterday.year, yesterday.month, yesterday.day,
         )
 
-        # energy on lista diktejä (yksi per päivä kuukaudelta).
-        # Data voi tulla 1–2 päivän viiveellä – otetaan viimeisin päivä jolla on dataa.
-        # kentät: timestamp (ISO, esim. "2026-03-14T00:00:00+02:00"), totalConsumption, invoicedConsumption
+        # Collect all days with data from current month
+        all_data: dict[str, float] = {}
+        _collect_entries(energy, all_data)
+
+        # If 7-day window crosses a month boundary, fetch previous month too
+        if window_start.month != yesterday.month:
+            prev_energy = client.get_energy(
+                customer_id, asset_id,
+                TimeSpan.MONTHLY,
+                window_start.year, window_start.month, window_start.day,
+            )
+            _collect_entries(prev_energy, all_data)
+
+        # Build sorted list for the 7-day window
+        w_start_str = window_start.isoformat()
+        w_end_str   = yesterday.isoformat()
+        daily_kwh = [
+            {"date": d, "kwh": round(all_data[d], 2)}
+            for d in sorted(all_data)
+            if w_start_str <= d <= w_end_str
+        ]
+
+        # Most recent day with data (may lag 1-2 days behind yesterday)
         kwh = None
         actual_date = None
-        for entry in reversed(energy):
-            val = entry.get("invoicedConsumption") or entry.get("totalConsumption")
-            if val is not None:
-                kwh = float(val)
-                actual_date = entry.get("timestamp", "")[:10]  # YYYY-MM-DD
-                break
+        if daily_kwh:
+            latest = daily_kwh[-1]
+            kwh = latest["kwh"]
+            actual_date = latest["date"]
 
     except DataFetchError:
         raise
@@ -99,6 +124,7 @@ def fetch(config: dict, use_cache: bool = True) -> dict:
         "yesterday_date":    actual_date or yesterday.isoformat(),
         "cost_estimate_eur": None,
         "fetched_at":        datetime.now().isoformat(timespec="seconds"),
+        "daily_kwh":         daily_kwh,
     }
 
     kwh_price = caruna_cfg.get("kwh_price_eur")

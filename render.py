@@ -64,7 +64,8 @@ ROW2_Y = ROW_H                     # 170
 NEWS_Y = ROW_H * 2                 # 340
 
 # Fonts
-FONT_HUGE   = _load_font(52, bold=True)   # temperature, kWh value
+FONT_HUGE   = _load_font(52, bold=True)   # temperature
+FONT_VLARGE = _load_font(42, bold=True)   # electricity kWh value
 FONT_LARGE  = _load_font(28, bold=True)   # HSL departure times
 FONT_MED    = _load_font(18, bold=True)   # event titles, waste types
 FONT_SMALL  = _load_font(17, bold=True)   # detail rows
@@ -368,11 +369,11 @@ def _draw_electricity(draw: ImageDraw.Draw, data: dict | None,
     dstr = data.get("yesterday_date", "")
 
     kwh_str = f"{kwh:.1f}" if kwh is not None else "-"
-    _text(draw, (x + PAD, cy), kwh_str, FONT_HUGE)
+    _text(draw, (x + PAD, cy), kwh_str, FONT_VLARGE)
 
     # "kWh" unit next to the number
-    bbox = draw.textbbox((0, 0), kwh_str, font=FONT_HUGE)
-    _text(draw, (x + PAD + bbox[2] - bbox[0] + 6, cy + 32), "kWh", FONT_SMALL, fill=GRAY)
+    bbox = draw.textbbox((0, 0), kwh_str, font=FONT_VLARGE)
+    _text(draw, (x + PAD + bbox[2] - bbox[0] + 6, cy + 24), "kWh", FONT_SMALL, fill=GRAY)
 
     # Date label below
     if dstr:
@@ -388,7 +389,30 @@ def _draw_electricity(draw: ImageDraw.Draw, data: dict | None,
                 label = f"{data_date.day}.{data_date.month}. ({delta} pv sitten)"
         except ValueError:
             label = dstr
-        _text(draw, (x + PAD, cy + 62), label, FONT_TINY, fill=GRAY)
+        _text(draw, (x + PAD, cy + 50), label, FONT_TINY, fill=GRAY)
+
+    # 7-day bar chart
+    bars = data.get("daily_kwh", [])
+    if bars:
+        BAR_AREA_H  = 40   # max bar height in px
+        BAR_LABEL_H = 14   # height reserved for day-of-month labels
+        bar_bottom = y + h - PAD - BAR_LABEL_H
+        bar_top    = bar_bottom - BAR_AREA_H
+
+        n      = len(bars)
+        avail_w = w - 2 * PAD
+        gap    = 4
+        bar_w  = max(4, (avail_w - gap * (n - 1)) // n)
+
+        max_kwh = max(b["kwh"] for b in bars) or 1
+
+        for i, entry in enumerate(bars):
+            bx    = x + PAD + i * (bar_w + gap)
+            bh    = max(2, int((entry["kwh"] / max_kwh) * BAR_AREA_H))
+            draw.rectangle([bx, bar_bottom - bh, bx + bar_w, bar_bottom], fill=FG)
+            d = datetime.strptime(entry["date"], "%Y-%m-%d")
+            _text(draw, (bx + bar_w // 2, bar_bottom + 2), str(d.day),
+                  FONT_LABEL, fill=GRAY, anchor="mt")
 
 
 def _draw_calendar(draw: ImageDraw.Draw, data: dict | None,
