@@ -86,6 +86,7 @@ def fetch(config: dict, use_cache: bool = True) -> dict:
             "precipitation",
         ],
         "daily": ["temperature_2m_max", "temperature_2m_min", "weather_code"],
+        "wind_speed_unit": "ms",
         "timezone": "auto",
         "forecast_days": 5,
     }
