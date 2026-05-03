@@ -39,12 +39,16 @@ def _save_cache(data: dict):
 
 
 def _parse_ical(content: bytes, cal_name: str, window_start: date, window_end: date) -> list[dict]:
-    """Parses iCal content and returns events within the time window."""
+    """Parses iCal content and returns events within the time window,
+    expanding recurring events (RRULE) into individual occurrences."""
     try:
         from icalendar import Calendar
-        from icalendar.cal import Todo  # noqa: F401 – for type checking
+        import recurring_ical_events
     except ImportError:
-        raise DataFetchError("icalendar is not installed. Run: pip install icalendar")
+        raise DataFetchError(
+            "icalendar / recurring-ical-events is not installed. "
+            "Run: pip install -r requirements.txt"
+        )
 
     try:
         cal = Calendar.from_ical(content)
@@ -53,10 +57,14 @@ def _parse_ical(content: bytes, cal_name: str, window_start: date, window_end: d
 
     events = []
 
-    for component in cal.walk():
-        if component.name != "VEVENT":
-            continue
+    # recurring_ical_events expands RRULEs and returns one component per
+    # occurrence within [window_start, window_end). The end is exclusive,
+    # so add one day to keep parity with the original inclusive comparison.
+    occurrences = recurring_ical_events.of(cal).between(
+        window_start, window_end + timedelta(days=1)
+    )
 
+    for component in occurrences:
         dtstart = component.get("DTSTART")
         if not dtstart:
             continue
@@ -72,9 +80,6 @@ def _parse_ical(content: bytes, cal_name: str, window_start: date, window_end: d
             event_date = start_val
             time_str   = None
             all_day    = True
-
-        if not (window_start <= event_date <= window_end):
-            continue
 
         # Parse end time for timed events so we can filter out past events
         end_iso: str | None = None
