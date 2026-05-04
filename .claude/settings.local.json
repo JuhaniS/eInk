@@ -11,7 +11,12 @@
       "Bash(venv/bin/python -c \"from pycaruna import CarunaPlus, Authenticator, TimeSpan; help\\(CarunaPlus\\)\")",
       "Bash(venv/bin/python -c \"from pycaruna import Authenticator; help\\(Authenticator.login\\)\")",
       "Bash(venv/bin/python -c \":*)",
-      "Bash(venv/bin/python -c \"from pycaruna import TimeSpan; print\\(list\\(TimeSpan\\)\\)\")"
+      "Bash(venv/bin/python -c \"from pycaruna import TimeSpan; print\\(list\\(TimeSpan\\)\\)\")",
+      "Bash(gh issue *)",
+      "WebFetch(domain:github.com)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "WebFetch(domain:raw.githubusercontent.com)"
     ]
   }
 }

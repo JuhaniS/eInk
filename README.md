@@ -113,6 +113,13 @@ python main.py --no-cache --preview
 # Test a single module
 python main.py --only weather
 python main.py --only hsl --no-cache
+
+# Partial-refresh just the cells listed in config.partial_updates (no API calls).
+# On macOS the simulator overlays the patched regions onto output/dashboard.png.
+python main.py --partial-only
+
+# Force a true full refresh instead of the default fast refresh
+python main.py --full-refresh
 ```
 
 ## Raspberry Pi deployment
@@ -157,11 +164,7 @@ rsync -av --exclude venv --exclude cache --exclude output --exclude .git \
 ssh USER@HOSTNAME "cd ~/eInk && python3 -m venv venv && venv/bin/pip install -r requirements.txt"
 ```
 
-Then install the Waveshare e-Paper library (not on PyPI — must be cloned from GitHub):
-
-```bash
-ssh USER@HOSTNAME "cd ~/eInk && git clone https://github.com/waveshare/e-Paper waveshare-epaper && venv/bin/pip install ./waveshare-epaper/RaspberryPi_JetsonNano/python/"
-```
+The e-paper driver is `betterepd7in5` (on PyPI, pulled in by `requirements.txt`). It fixes the partial-update-after-sleep corruption the stock Waveshare driver exhibits and is significantly faster on the Pi Zero 2 W.
 
 ### 7. Create required directories
 
@@ -183,20 +186,27 @@ ssh USER@HOSTNAME "cd ~/eInk && venv/bin/python main.py --no-cache"
 
 ### 10. Set up cron
 
+The crontab is checked in at `cron/eink.crontab` and installed via `sync_cron.sh`. Three rhythms run on `flock`-protected mutually-exclusive minute slots so they can't collide on the SPI bus:
+
+| Slot | Command | Purpose |
+|---|---|---|
+| Minutes 1–9, 11–19, …, 51–59 | `main.py --partial-only` | Partial-refresh cells in `config.partial_updates` (no API calls) |
+| Minutes 10, 20, 30, 40, 50 | `main.py` | Fast refresh of the full dashboard |
+| Minute 0 (every hour) + `@reboot` | `main.py --full-refresh` | True full refresh — clears ghosting, bootstraps partial baseline |
+
+Edit `cron/eink.crontab` (update `juhani` to your username) then push:
+
 ```bash
-ssh -t USER@HOSTNAME "crontab -e"
+./sync_cron.sh
 ```
 
-Add (replace `juhani` with your username):
-```
-@reboot sleep 30 && cd /home/juhani/eInk && venv/bin/python main.py >> /tmp/eink.log 2>&1
-*/10 * * * * cd /home/juhani/eInk && venv/bin/python main.py >> /tmp/eink.log 2>&1
-```
+The script preserves any other crontab entries on the Pi — it only replaces the block between `# >>> eink-managed >>>` markers.
 
 ### Sync changes from Mac
 
 ```bash
-./sync.sh
+./sync.sh        # rsync project files (excludes venv, cache, output, .git)
+./sync_cron.sh   # only when cron/eink.crontab changed
 ```
 
 ## Project structure
@@ -205,8 +215,12 @@ Add (replace `juhani` with your username):
 eInk/
 ├── main.py              # Entry point, CLI args, module orchestration
 ├── render.py            # Pillow-based image renderer (800×480, grayscale)
+├── sync.sh              # rsync project files Mac → Pi
+├── sync_cron.sh         # Push cron/eink.crontab to the Pi
 ├── config.yaml          # Your config (not committed)
 ├── config.example.yaml  # Template
+├── cron/
+│   └── eink.crontab     # Managed crontab block (installed via sync_cron.sh)
 ├── data/
 │   ├── weather.py       # Open-Meteo
 │   ├── calendar.py      # iCal / Google Calendar
@@ -214,12 +228,12 @@ eInk/
 │   ├── electricity.py   # Caruna / pycaruna
 │   ├── waste.py         # Manual waste schedule
 │   ├── evaka.py         # Espoo daycare (eVaka)
-│   └── hsl.py           # HSL Digitransit transit
+│   └── hsl.py           # HSL Digitransit transit (incl. drop_past_departures filter)
 ├── display/
 │   ├── simulator.py     # PNG output for macOS development
-│   └── epaper.py        # Waveshare 7.5" v2 driver (Raspberry Pi)
+│   └── epaper.py        # Waveshare 7.5" V2 driver via betterepd7in5
 ├── fonts/               # Optional: place Inter-Regular.ttf + Inter-Bold.ttf here
-├── cache/               # JSON cache files (auto-generated)
+├── cache/               # JSON cache files + cur_display.png partial baseline (auto-generated)
 └── output/              # Output PNG (auto-generated, macOS only)
 ```
 
@@ -235,3 +249,17 @@ cache:
   evaka_ttl_minutes: 1440   # daycare: once per day
   electricity_ttl_minutes: 720
 ```
+
+## Partial updates
+
+The cron's per-minute slot runs `main.py --partial-only`, which re-renders the dashboard from cache only (no API calls) and partial-refreshes the cells listed in config:
+
+```yaml
+partial_updates:
+  clock: true   # ticks every minute
+  hsl: true     # drops connections whose departure has passed
+```
+
+Available cells are defined in `render.py` as `PARTIAL_CELLS`. Each entry is `{region, data_key, filter}` where `filter` is an optional `module:function` that mutates the cell's data before render — the HSL cell uses `data.hsl:drop_past_departures` to remove connections where the recomputed `minutes_until ≤ 0`. New partial-eligible cells need an `x`-aligned region (multiples of 8) and an entry in the registry.
+
+If `partial_updates` is missing or empty, `--partial-only` is a no-op.

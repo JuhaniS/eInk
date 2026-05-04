@@ -78,6 +78,17 @@ display:
   height: 480
   rotation: 0    # 0 or 180
 
+# ── Partial updates ──────────────────────────────────────────────────────────
+# Cells listed here as `true` get partial-refreshed every minute by
+# `main.py --partial-only` (no API calls — reads cache only). Uses the
+# `betterepd7in5` partial path on the Pi. Cells set to `false` (or omitted)
+# only refresh during the 10-min fast / hourly full refresh.
+# Available cells: clock, hsl. (Add more to render.py:PARTIAL_CELLS first.)
+# A missing or empty `partial_updates` makes --partial-only a no-op.
+partial_updates:
+  clock: true
+  hsl: true
+
 # ── Cache TTLs ────────────────────────────────────────────────────────────────
 # main.py is run by cron every 10 minutes.
 # Each module refreshes only when its TTL has expired.

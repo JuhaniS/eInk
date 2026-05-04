@@ -102,6 +102,14 @@ def parse_args():
         help="Run only one module (for testing)"
     )
     parser.add_argument(
+        "--full-refresh", action="store_true",
+        help="Use a true full refresh instead of fast refresh (clears ghosting)"
+    )
+    parser.add_argument(
+        "--partial-only", action="store_true",
+        help="Partial-refresh all cells enabled in config.yaml's partial_updates"
+    )
+    parser.add_argument(
         "--config", default="config.yaml",
         help="Configuration file (default: config.yaml)"
     )
@@ -128,6 +136,59 @@ def main():
         data = fetch_module(args.only, config, use_cache)
         import json
         print(json.dumps(data, ensure_ascii=False, indent=2))
+        return
+
+    if args.partial_only:
+        import importlib
+        import json
+
+        def _load_cache(name):
+            path = Path(f"cache/{name}.json")
+            if not path.exists():
+                return None
+            try:
+                return json.loads(path.read_text(encoding="utf-8"))
+            except Exception as e:
+                log.warning("cache/%s.json unreadable: %s", name, e)
+                return None
+
+        def _resolve_filter(spec: str):
+            mod_name, fn_name = spec.split(":", 1)
+            return getattr(importlib.import_module(mod_name), fn_name)
+
+        from render import render, PARTIAL_CELLS
+
+        enabled_cfg = config.get("partial_updates") or {}
+        enabled = [name for name, on in enabled_cfg.items()
+                   if on and name in PARTIAL_CELLS]
+        if not enabled:
+            log.warning("partial_updates: no cells enabled in config; nothing to do")
+            return
+
+        # Load all module caches once (no API calls)
+        data = {n: _load_cache(n) for n in
+                ("weather", "electricity", "waste", "calendar", "evaka", "hsl", "news")}
+
+        # Apply per-cell filters (currently only HSL has one)
+        for name in enabled:
+            cell = PARTIAL_CELLS[name]
+            if cell["filter"] and cell["data_key"]:
+                fn = _resolve_filter(cell["filter"])
+                data[cell["data_key"]] = fn(data[cell["data_key"]])
+
+        image = render(
+            weather=data["weather"], electricity=data["electricity"],
+            waste=data["waste"], calendar=data["calendar"],
+            daycare=data["evaka"], hsl=data["hsl"], news=data["news"],
+        )
+
+        regions = [(image.crop(PARTIAL_CELLS[n]["region"]),
+                    PARTIAL_CELLS[n]["region"]) for n in enabled]
+
+        log.info("Partial-refresh: %s", ", ".join(enabled))
+        display = get_display()
+        display.show_partials(regions, open_preview=args.preview)
+        log.info("Done.")
         return
 
     # Fetch all modules independently
@@ -167,7 +228,10 @@ def main():
 
     # Display image
     display = get_display()
-    display.show(image, open_preview=args.preview)
+    if args.full_refresh and hasattr(display, "show_full"):
+        display.show_full(image, open_preview=args.preview)
+    else:
+        display.show(image, open_preview=args.preview)
     log.info("Done.")
 
 

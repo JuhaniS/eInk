@@ -94,6 +94,24 @@ def _within_active_hours(active_hours: list) -> bool:
     return active_hours[0] <= hour <= active_hours[1]
 
 
+def drop_past_departures(hsl: dict | None) -> dict | None:
+    """Returns hsl with connections whose recomputed minutes_until <= 0 dropped.
+    Used by --partial-only to keep the HSL cell fresh between API fetches."""
+    if not hsl or not hsl.get("connections"):
+        return hsl
+    try:
+        fetched_at = datetime.fromisoformat(hsl["fetched_at"])
+    except (KeyError, ValueError):
+        return hsl
+    elapsed_min = (datetime.now() - fetched_at).total_seconds() / 60
+    updated = []
+    for c in hsl["connections"]:
+        cur = c.get("minutes_until", 0) - elapsed_min
+        if cur > 0:
+            updated.append({**c, "minutes_until": int(cur)})
+    return {**hsl, "connections": updated}
+
+
 def fetch(config: dict, use_cache: bool = True) -> dict:
     cache_cfg   = config.get("cache", {})
     ttl         = cache_cfg.get("hsl_ttl_minutes", DEFAULT_TTL_MIN)

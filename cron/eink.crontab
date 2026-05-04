@@ -1,0 +1,14 @@
+# >>> eink-managed >>>
+# Edit cron/eink.crontab in the eInk repo, then run ./sync_cron.sh to push.
+# Three rhythms (cells they touch are configured in config.yaml's partial_updates):
+#   * partial (cells from config.partial_updates) — every minute except multiples of 10
+#   * fast refresh (full dashboard) — minutes 10/20/30/40/50
+#   * full refresh (clears ghosting) — top of every hour + on boot
+# All entries flock so they never collide on SPI bus or cache/cur_display.png.
+# `flock -n` skips the run if the lock is held — partial ticks happily skip when
+# a long full-refresh overruns into the next minute.
+1-9,11-19,21-29,31-39,41-49,51-59 * * * * flock -n /tmp/eink.lock -c 'cd /home/juhani/eInk && venv/bin/python main.py --partial-only'
+10,20,30,40,50 * * * * flock -n /tmp/eink.lock -c 'cd /home/juhani/eInk && venv/bin/python main.py'
+0 * * * * flock -n /tmp/eink.lock -c 'cd /home/juhani/eInk && venv/bin/python main.py --full-refresh'
+@reboot flock -n /tmp/eink.lock -c 'cd /home/juhani/eInk && venv/bin/python main.py --full-refresh'
+# <<< eink-managed <<<

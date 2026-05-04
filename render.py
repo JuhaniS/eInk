@@ -597,3 +597,20 @@ def render(
     _draw_news(draw, news, 0, NEWS_Y, width, NEWS_H)
 
     return img
+
+
+# ── Partial: clock region ────────────────────────────────────────────────────
+#
+# Box is 8-px aligned on x so the 1bpp framebuffer slice is byte-aligned for
+# the Waveshare 7.5" V2 partial-display API.
+
+CLOCK_REGION = (704, 4, 800, 48)  # x0, y0, x1, y1
+HSL_REGION   = (264, 170, 536, 340)  # full HSL cell + a few px of dividers
+
+# Registry of cells eligible for partial refresh. Keys match config.yaml's
+# `partial_updates` dict. Each entry has a region (x-aligned to 8) and an
+# optional pre-render filter (`module:function`) applied to the cell's data.
+PARTIAL_CELLS = {
+    "clock": {"region": CLOCK_REGION, "data_key": None,        "filter": None},
+    "hsl":   {"region": HSL_REGION,   "data_key": "hsl",       "filter": "data.hsl:drop_past_departures"},
+}
