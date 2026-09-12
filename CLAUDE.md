@@ -136,6 +136,12 @@ Cron runs `main.py` every 10 minutes + `@reboot`; each module decides independen
 - Each connection returns: departure, arrival, minutes_until, lines ("165 -> U"),
   walk_minutes, first_mode, first_stop, first_depart
 - Outside `hsl_active_hours`: returns stale cache or empty result (no API call)
+- `drop_past_departures()` recomputes `minutes_until` against `fetched_at` and
+  drops connections that have already left. `main.py` applies it on every run
+  (not just `--partial-only`), so a stale fallback (fetch failure) shows a
+  correctly-decaying countdown instead of flashing the original, un-decayed
+  minutes for up to one full cron cycle before the next per-minute partial
+  tick empties it out.
 - Render: first connection shown with FONT_MED + badge, rest compact
 
 ## eVaka module specifics (data/evaka.py)

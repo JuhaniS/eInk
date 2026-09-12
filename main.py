@@ -205,6 +205,15 @@ def main():
     hsl = None
     if config.get("hsl", {}).get("api_key"):
         hsl = fetch_module("hsl", config, use_cache)
+        if hsl:
+            # Recompute countdowns against "now" even on this full-refresh path.
+            # Without this, a stale fallback (API/network failure) would render
+            # its original, un-decayed minutes_until for up to one full cron
+            # cycle, then jump to empty once the per-minute --partial-only tick
+            # (which already applies this) decays it away — a confusing flash
+            # between "wrong" and "empty" instead of a consistent countdown.
+            from data.hsl import drop_past_departures
+            hsl = drop_past_departures(hsl)
 
     # Render image
     log.info("Rendering image...")
